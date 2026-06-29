@@ -9,11 +9,12 @@ check_dir = Path("label_check")
 
 check_dir.mkdir(exist_ok=True)
 
-BOX_RADIUS = 20
+BOX_RADIUS = 30
 SAVE_CHECK_IMAGES = False
 SAMPLE_EVERY = 10
 
 rows = []
+skipped_boxes = 0
 
 for csv_path in sorted(training_dir.glob("*.csv")): # use all csv
     video_name = csv_path.stem
@@ -48,10 +49,14 @@ for csv_path in sorted(training_dir.glob("*.csv")): # use all csv
             x = float(row["x"])
             y = float(row["y"])
 
-            xmin = max(0, x - BOX_RADIUS)
-            ymin = max(0, y - BOX_RADIUS)
-            xmax = min(width - 1, x + BOX_RADIUS)
-            ymax = min(height - 1, y + BOX_RADIUS)
+            xmin = min(width - 1, max(0, x - BOX_RADIUS))
+            ymin = min(height - 1, max(0, y - BOX_RADIUS))
+            xmax = min(width - 1, max(0, x + BOX_RADIUS))
+            ymax = min(height - 1, max(0, y + BOX_RADIUS))
+
+            if xmax <= xmin or ymax <= ymin:
+                skipped_boxes += 1
+                continue
 
             rows.append({
                 "image_path": str(frame_path),
@@ -81,10 +86,13 @@ for csv_path in sorted(training_dir.glob("*.csv")): # use all csv
                 
                 
                 
-                xmin = max(0, x - BOX_RADIUS)
-                ymin = max(0, y - BOX_RADIUS)
-                xmax = min(width - 1, x + BOX_RADIUS)
-                ymax = min(height - 1, y + BOX_RADIUS)
+                xmin = min(width - 1, max(0, x - BOX_RADIUS))
+                ymin = min(height - 1, max(0, y - BOX_RADIUS))
+                xmax = min(width - 1, max(0, x + BOX_RADIUS))
+                ymax = min(height - 1, max(0, y + BOX_RADIUS))
+
+                if xmax <= xmin or ymax <= ymin:
+                    continue
 
                 cv2.rectangle(image, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
                 cv2.circle(image, (x, y), 4, (0, 0, 255), -1)
@@ -109,3 +117,4 @@ annotations.to_csv(output_csv, index=False)
 print(f"\nSaved: {output_csv}")
 print(f"Total boxes: {len(annotations)}")
 print(f"Total images with labels: {annotations['image_path'].nunique()}")
+print(f"Skipped invalid boxes: {skipped_boxes}")

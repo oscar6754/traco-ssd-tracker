@@ -3,7 +3,7 @@ from torch.utils.data import DataLoader
 from torchvision.models.detection import ssd300_vgg16
 from torchvision.models import VGG16_Weights
 
-from test_dataset import TracoSSDDataset
+from dataset import TracoSSDDataset
 
 
 TRAIN_CSV = "ssd_annotations_train.csv"
@@ -12,14 +12,16 @@ VAL_CSV = "ssd_annotations_val.csv"
 NUM_CLASSES = 2  # background + hexbug_head
 
 BATCH_SIZE = 4
-NUM_EPOCHS = 5
-LEARNING_RATE = 1e-5
+NUM_EPOCHS = 40
+LEARNING_RATE = 3e-5
 WEIGHT_DECAY = 1e-4
 
 NUM_WORKERS = 4
 
-SAVE_EVERY_EPOCH = True
+USE_AUGMENTATION = True
+SAVE_EVERY_EPOCH = False
 BEST_MODEL_PATH = "ssd_hexbug_best.pth"
+LAST_MODEL_PATH = "ssd_hexbug_last.pth"
 
 
 def collate_fn(batch):
@@ -75,11 +77,12 @@ def main():
     if device.type == "cuda":
         torch.backends.cudnn.benchmark = True
 
-    train_dataset = TracoSSDDataset(TRAIN_CSV)
-    val_dataset = TracoSSDDataset(VAL_CSV)
+    train_dataset = TracoSSDDataset(TRAIN_CSV, augment=USE_AUGMENTATION)
+    val_dataset = TracoSSDDataset(VAL_CSV, augment=False)
 
     print("Train images:", len(train_dataset))
     print("Validation images:", len(val_dataset))
+    print("Training augmentation:", USE_AUGMENTATION)
 
     train_loader = DataLoader(
         train_dataset,
@@ -122,7 +125,7 @@ def main():
         optimizer,
         mode="min",
         factor=0.5,
-        patience=2,
+        patience=4,
     )
 
     scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
@@ -185,7 +188,8 @@ def main():
             use_amp=use_amp,
         )
 
-        scheduler.step(val_loss)
+        if val_loss == val_loss:
+            scheduler.step(val_loss)
 
         print(f"Epoch {epoch + 1} train loss: {avg_train_loss:.4f}")
         print(f"Epoch {epoch + 1} validation loss: {val_loss:.4f}")
@@ -194,6 +198,8 @@ def main():
             epoch_model_path = f"ssd_hexbug_epoch_{epoch + 1}.pth"
             torch.save(model.state_dict(), epoch_model_path)
             print(f"Saved epoch model: {epoch_model_path}")
+
+        torch.save(model.state_dict(), LAST_MODEL_PATH)
 
         if val_loss < best_val_loss:
             best_val_loss = val_loss

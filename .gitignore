@@ -1,0 +1,17 @@
+# Virtual environments
+.venv/
+venv/
+
+# Python cache / compiled files
+__pycache__/
+*.py[cod]
+
+# VS Code personal configuration
+.vscode/
+
+# Project data that should stay local
+frames/
+training/
+
+# Optional: trained model weights
+*.pth
