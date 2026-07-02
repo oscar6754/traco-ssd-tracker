@@ -1,66 +1,71 @@
-# TRACO 2024 HexBug Tracking
+# TRACO 2024 YOLO Pipeline
 
-This project detects HexBug heads with a trained Torchvision SSD model, then links detections into stable identities over time.
+This project detects and tracks HexBug heads for TRACO 2024.
+
+The current pipeline is YOLO-only:
+
+1. Build point-centered detection boxes.
+2. Export annotations to YOLO format.
+3. Train YOLO.
+4. Predict videos with the simple YOLO tracker.
+5. Score validation predictions with the provided scorer.
 
 ## Main Files
 
-- `dataset.py`: SSD training dataset for frame annotations.
-- `train_ssd.py`: trains `ssd300_vgg16` with `num_classes=2`.
-- `tracking/detection.py`: SSD loading, candidate filtering, box priors, NMS, optional motion filtering.
-- `tracking/motion.py`: median background and motion-mask helpers.
-- `tracking/multi_object_tracker.py`: tentative/confirmed multi-object tracker with Hungarian assignment.
-- `predict_video.py`: end-to-end prediction for one video or a directory of videos.
-- `evaluate_predictions.py`: local validation scoring with `get_score.py`.
+- `extract_frames.py`: extracts video frames into `frames/`.
+- `create_annotations.py`: creates point-centered detection boxes with `BOX_RADIUS = 24`.
+- `split_annotations.py`: creates train/validation annotation splits.
+- `export_yolo_dataset.py`: writes the YOLO dataset under `yolo_dataset/`.
+- `train_yolo.py`: trains or resumes a YOLO detector.
+- `predict_video_yolo_simple.py`: final simple YOLO prediction pipeline.
+- `evaluate_predictions.py`: scores predictions against local ground truth.
+- `get_score.py` and `helper.py`: official/local scoring helpers.
 
-The old prototype scripts are still present for reference, but `predict_video.py` is the clean inference path.
-
-## Useful Commands
-
-Regenerate SSD annotations after changing annotation code:
+## Build Data
 
 ```powershell
-.\.venv\Scripts\python.exe create_ssd_annotations.py
+.\.venv\Scripts\python.exe create_annotations.py
 .\.venv\Scripts\python.exe split_annotations.py
+.\.venv\Scripts\python.exe export_yolo_dataset.py
 ```
 
-Train the SSD model:
+## Train YOLO
+
+The training values are fixed at the top of `train_yolo.py`.
+
+```bash
+python train_yolo.py
+```
+
+Resume after a time-limited GPU session:
+
+```bash
+python train_yolo.py --resume
+```
+
+Use `best.pt` for prediction. `last.pt` is only for continuing training.
+Copy the final model to the project root as `best.pt`.
+
+## Predict Test Videos
+
+The current inference values are fixed at the top of `predict_video_yolo_simple.py`.
+
+```bash
+python predict_video_yolo_simple.py
+```
+
+The CSV files are written to `predictions/`.
+
+## Score Local Predictions
 
 ```powershell
-.\.venv\Scripts\python.exe train_ssd.py
+.\.venv\Scripts\python.exe evaluate_predictions.py --prediction-dir predictions_val --ground-truth-dir training --percent
 ```
 
-Predict one validation video:
-
-```powershell
-.\.venv\Scripts\python.exe predict_video.py --video training\training01.mp4 --output predictions_clean\training01.csv
-```
-
-Score that prediction:
-
-```powershell
-.\.venv\Scripts\python.exe evaluate_predictions.py --prediction predictions_clean\training01.csv --ground-truth training\training01.csv --log --make-video
-```
-
-Predict a folder of leaderboard videos:
-
-```powershell
-.\.venv\Scripts\python.exe predict_video.py --video-dir test --output-dir predictions_leaderboard
-```
-
-## CSV Format
-
-Predictions are saved with the pandas index because `get_score.py` reads with `index_col=0`.
-
-Required columns:
+Predictions are saved as CSV files with columns:
 
 ```csv
 ,t,hexbug,x,y
 0,0,0,123.4,456.7
 1,0,1,700.2,350.1
 ```
-
-`hexbug` is a stable tracker ID, not a detector class. The pipeline keeps output IDs in the safe scorer range `0..10`.
-
-## Data Notes
-
-The training labels show up to 4 HexBugs per video. Most videos have 101 labeled frames, but a few tracks begin or end, and some labels go outside the frame. The new pipeline does not require a known HexBug count at inference time.

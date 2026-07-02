@@ -22,8 +22,8 @@ def cdist(XA, XB, metric='euclidean', *args, **kwargs):
 
     Returns:
     - Y : ndarray
-        A condensed distance matrix Y. For each \(i\) and \(j\), \(Y[i, j]\)
-        is the distance between the \(i\)-th and \(j\)-th vectors of the
+        A condensed distance matrix Y. For each i and j, Y[i, j]
+        is the distance between the i-th and j-th vectors of the
         given matrices.
 
     References:
@@ -452,4 +452,3 @@ class CoverZeros:
         shuffle(row_indices)
         column_index, = np.where(self._choices[row_indices[0]])
         return row_indices[0], column_index[0]
-
