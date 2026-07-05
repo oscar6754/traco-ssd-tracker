@@ -7,7 +7,7 @@ The current pipeline is YOLO-only:
 1. Build point-centered detection boxes.
 2. Export annotations to YOLO format.
 3. Train YOLO.
-4. Predict videos with the simple YOLO tracker.
+4. Predict videos with the offline YOLO tracker.
 5. Score validation predictions with the provided scorer.
 
 ## Main Files
@@ -17,7 +17,8 @@ The current pipeline is YOLO-only:
 - `split_annotations.py`: creates train/validation annotation splits.
 - `export_yolo_dataset.py`: writes the YOLO dataset under `yolo_dataset/`.
 - `train_yolo.py`: trains or resumes a YOLO detector.
-- `predict_video_yolo_simple.py`: final simple YOLO prediction pipeline.
+- `predict_video_yolo.py`: final YOLO prediction pipeline with offline trajectory selection.
+- `debug_predictions.py`: creates videos with predicted points and trajectories.
 - `evaluate_predictions.py`: scores predictions against local ground truth.
 - `get_score.py` and `helper.py`: official/local scoring helpers.
 
@@ -48,13 +49,21 @@ Copy the final model to the project root as `best.pt`.
 
 ## Predict Test Videos
 
-The current inference values are fixed at the top of `predict_video_yolo_simple.py`.
+The current inference values are fixed at the top of `predict_video_yolo.py`.
 
 ```bash
-python predict_video_yolo_simple.py
+python predict_video_yolo.py
 ```
 
 The CSV files are written to `predictions/`.
+
+## Debug Predictions
+
+```bash
+python debug_predictions.py
+```
+
+Debug videos are written to `debug_videos/`.
 
 ## Score Local Predictions
 

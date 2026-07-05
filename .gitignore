@@ -13,5 +13,4 @@ __pycache__/
 frames/
 training/
 test/
-predictions/
 best.pt
