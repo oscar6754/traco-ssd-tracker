@@ -11,6 +11,7 @@ __pycache__/
 
 # Project data that should stay local
 frames/
-training/
-test/
+predictions/
+debug_videos/
+debug_sheets/
 best.pt
