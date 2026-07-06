@@ -14,19 +14,26 @@ MODEL_PATH = Path("best.pt")
 
 IMAGE_SIZE = 1280
 DEVICE = "auto"
+
+# Low threshold on purpose
+# The tracker can reject weak points, but cannot recover a missing bug
 SCORE_THRESHOLD = 0.04
 IOU_THRESHOLD = 0.45
 MAX_CANDIDATES = 40
 EDGE_MARGIN = 12
 
-MAX_TRACKS = 4
+# Competition limit, still estimated from each video
+MAX_TRACKS = 11
 COUNT_SCORE_THRESHOLD = 0.10
 COUNT_PERCENTILE = 80
 DUPLICATE_DISTANCE = 30.0
 ASSIGNMENT_DISTANCE = 280.0
+
+# Track IDs start from a few stable frames, not just frame 0
 START_FRAME_OPTIONS = 10
 LOCAL_SUPPORT_FRAMES = 3
 LOCAL_SUPPORT_DISTANCE = 120.0
+
 MAX_REASONABLE_SPEED = 160.0
 MAX_EXTRAPOLATION_SPEED = 120.0
 
@@ -39,6 +46,7 @@ class Detection:
 
 
 def detect_frame(model, frame):
+    """YOLO detections converted to center points"""
     height, width = frame.shape[:2]
     predict_args = {
         "source": frame,
@@ -88,7 +96,7 @@ def detect_frame(model, frame):
 
 
 def remove_duplicate_detections(detections):
-    # YOLO can return two boxes on the same bug; keep the strongest one.
+    # Sometimes YOLO draws the same bug twice
     kept = []
 
     for detection in detections:
@@ -107,6 +115,7 @@ def detection_distance(first, second):
 
 
 def read_video_detections(video_path, model):
+    """Collect detections before tracking so we can use the full video"""
     cap = cv2.VideoCapture(str(video_path))
     if not cap.isOpened():
         raise RuntimeError(f"Could not open video: {video_path}")
@@ -127,6 +136,7 @@ def read_video_detections(video_path, model):
 
 
 def estimate_track_count(detections):
+    """Guess the fixed number of bugs in the video"""
     counts = []
     has_any_detection = False
 
@@ -151,7 +161,7 @@ def estimate_track_count(detections):
 
 
 def choose_start_frames(detections, track_count):
-    # We have the full video, so start tracking from frames that look stable.
+    # Use the full video to avoid starting from a messy frame
     frame_scores = []
 
     for frame_index, frame_detections in enumerate(detections):
@@ -169,6 +179,7 @@ def choose_start_frames(detections, track_count):
 
 
 def score_start_frame(detections, frame_index, track_count):
+    # Confidence plus nearby support gives a cleaner seed
     score = 0.0
 
     for detection in detections[frame_index][:track_count]:
@@ -211,6 +222,7 @@ def make_track_states(seed_detections, frame_index):
 
 
 def predicted_position(state, frame_index):
+    # Short gaps are handled with a simple velocity guess
     gap = max(1, abs(frame_index - state["last_frame"]))
     return state["x"] + state["vx"] * gap, state["y"] + state["vy"] * gap
 
@@ -228,6 +240,7 @@ def update_state(state, detection, frame_index):
 
 
 def advance_without_detection(state, frame_index):
+    # Keep moving through missed detections
     state["x"], state["y"] = predicted_position(state, frame_index)
     state["last_frame"] = frame_index
 
@@ -236,7 +249,7 @@ def assign_detections(states, frame_detections, frame_index):
     if not frame_detections:
         return {}
 
-    # Hungarian assignment keeps one detection matched to at most one track.
+    # One detection per track, one track per detection
     costs = np.zeros((len(states), len(frame_detections)), dtype=float)
     distances = np.zeros_like(costs)
 
@@ -283,8 +296,8 @@ def build_tracks(detections, track_count, start_frame):
         for detection in seed_detections
     ]
 
-    # The scorer punishes ID changes hard, so tracks are followed both ways
-    # from a frame where YOLO is confident about all visible bugs.
+    # Track forward and backward from the same seed frame
+    # This reduces early-video ID mistakes
     forward_states = make_track_states(seed_detections, start_frame)
     follow_tracks(
         track_points,
@@ -305,6 +318,7 @@ def build_tracks(detections, track_count, start_frame):
 
 
 def choose_tracks(detections):
+    # If the count was too high, try one less
     track_count = estimate_track_count(detections)
     while track_count > 0:
         best_tracks, _ = choose_best_tracks_for_count(detections, track_count)
@@ -317,6 +331,7 @@ def choose_tracks(detections):
 
 
 def choose_best_tracks_for_count(detections, track_count):
+    # Try several seeds and keep the smoothest set
     best_tracks = []
     best_score = -float("inf")
 
@@ -331,7 +346,7 @@ def choose_best_tracks_for_count(detections, track_count):
 
 
 def score_track_set(track_points):
-    # Good tracks are long, but they should not jump across the image.
+    # Long tracks are good; sudden jumps are suspicious
     score = 0.0
 
     for points in track_points:
@@ -373,7 +388,8 @@ def tracks_to_dataframe(track_points, total_frames, width, height):
 
 
 def fill_track_values(points, total_frames, value_index):
-    # The submission needs one point per frame, even when YOLO misses a bug.
+    # The CSV needs every frame, even when YOLO misses
+    # Interpolate inside the track and extrapolate only at the edges
     values = np.full(total_frames, np.nan, dtype=float)
 
     for frame_index, point in points.items():

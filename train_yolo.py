@@ -13,6 +13,8 @@ EPOCHS = 50
 TIME_LIMIT_HOURS = 3.7
 DEVICE = "0,1,2,3"
 
+# Light augmentation for brightness, scale and small rotations
+# Stronger changes started to hurt the real test videos
 MOSAIC = 0.30
 SCALE = 0.25
 TRANSLATE = 0.05
@@ -42,6 +44,7 @@ def main():
         ) from exc
 
     if args.resume:
+        # Resume keeps the same run folder and best.pt
         model = YOLO(str(LAST_MODEL))
         model.train(
             resume=True,
